@@ -1,3 +1,5 @@
+import { migrateIssuesForRepo } from './migrator'
+
 require('dotenv').config()
 
-console.log(process.env["CLUBHOUSE_TOKEN"])
+migrateIssuesForRepo({})
