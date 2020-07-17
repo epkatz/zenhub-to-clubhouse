@@ -1,6 +1,7 @@
 import { Octokit } from "@octokit/rest";
 import Clubhouse from "clubhouse-lib";
 import moment from "moment";
+import ZenHub from "node-zenhub";
 
 const getLabels = (labels) =>
   labels.map(({ name, color, description }) => ({
@@ -25,6 +26,8 @@ const createStory = async ({
   title,
   body,
   comments,
+  workflow_state_id,
+  estimate,
 }) => {
   const { id } = await clubhouseApi.createStory({
     created_at,
@@ -34,6 +37,8 @@ const createStory = async ({
     description: body,
     project_id: parseInt(process.env["PROJECT_ID"], 10),
     labels: getLabels(labels),
+    workflow_state_id,
+    estimate,
   });
 
   for (const comment of comments) {
@@ -54,6 +59,7 @@ export const migrateIssuesForRepo = async ({
     auth: process.env.GITHUB_ACCESS_TOKEN,
   });
   const clubhouseApi = Clubhouse.create(process.env.CLUBHOUSE_TOKEN);
+  const zenhubApi = new ZenHub(process.env.ZENHUB_TOKEN);
 
   const options = octokit.issues.listForRepo.endpoint.merge({
     owner: process.env.GITHUB_OWNER,
@@ -80,13 +86,27 @@ export const migrateIssuesForRepo = async ({
     issue_number: firstIssue.number,
   });
 
-  await createStory({
-    clubhouseApi,
-    created_at: firstIssue.created_at,
-    updated_at: firstIssue.updated_at,
-    labels: firstIssue.labels,
-    title: firstIssue.title,
-    body: firstIssue.body,
-    comments: commentsResponse.data,
-  });
+  var cb = function (error, data) {
+    console.log(error);
+    console.log(data);
+}
+
+  // const issue = zenhubApi.issues.getIssue(firstIssue.number);
+  console.log(zenhubApi.issues.getIssueData(273086464, firstIssue.number, cb));
+
+  // estimate.value
+  // is_epic
+  // pipeline.name
+
+  //   await createStory({
+  //     clubhouseApi,
+  //     created_at: firstIssue.created_at,
+  //     updated_at: firstIssue.updated_at,
+  //     labels: firstIssue.labels,
+  //     title: firstIssue.title,
+  //     body: firstIssue.body,
+  //     comments: commentsResponse.data,
+  //      workflow_state_id,
+  //   });
+  // };
 };
