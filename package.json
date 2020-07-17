@@ -1,13 +1,27 @@
 {
   "name": "github-issues-to-clubhouse",
   "version": "1.0.0",
-  "description": "",
+  "description": "Migrate from Zenhub to Github",
   "main": "index.js",
   "scripts": {
     "start": "ts-node src/index.ts"
   },
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "clubhouse",
+    "epics",
+    "github",
+    "import",
+    "importer",
+    "issue",
+    "issues",
+    "migrate",
+    "migrator",
+    "stories",
+    "story",
+    "zenhub"
+  ],
+  "author": "@epkatz",
+  "license": "MIT",
   "dependencies": {
     "@octokit/rest": "^18.0.0",
     "@types/node": "^14.0.14",
