@@ -2,7 +2,7 @@
 
 ## Instructions
 
-Make a copy of the `.env.example` file
+Make an `.env` by copying the `.env.example` file name
 
 Replace the dummy values with your own.
 
