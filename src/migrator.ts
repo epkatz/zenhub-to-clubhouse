@@ -3,54 +3,6 @@ import Clubhouse from "clubhouse-lib";
 import moment from "moment";
 import ZenHub from "node-zenhub";
 
-const getLabels = (labels) =>
-  labels.map(({ name, color, description }) => ({
-    color,
-    description,
-    external_id: name,
-    name,
-  }));
-
-const getStoryType = (labels) => {
-  if (labels.find(({ name }) => name.includes("bug"))) {
-    return "bug";
-  }
-  return "feature";
-};
-
-const createStory = async ({
-  clubhouseApi,
-  created_at,
-  updated_at,
-  labels,
-  title,
-  body,
-  comments,
-  workflow_state_id,
-  estimate,
-}) => {
-  const { id } = await clubhouseApi.createStory({
-    created_at,
-    updated_at,
-    story_type: getStoryType(labels),
-    name: title,
-    description: body,
-    project_id: parseInt(process.env["PROJECT_ID"], 10),
-    labels: getLabels(labels),
-    workflow_state_id,
-    estimate,
-  });
-
-  for (const comment of comments) {
-    await clubhouseApi.createStoryComment(
-      id,
-      `*Migrated From Zenhub* \n\n${comment.user.login} on ${moment(
-        comment.created_at
-      ).format("MMMM Do YYYY, h:mm:ss a")} \n${comment.body}`
-    );
-  }
-};
-
 export const migrateIssuesForRepo = async ({
   state = "open",
   per_page = 10,
@@ -78,35 +30,166 @@ export const migrateIssuesForRepo = async ({
       console.log(err);
     });
 
-  const firstIssue: any = issues.filter((issue) => issue.comments > 0)[0];
+  await Promise.all(
+    issues.map(async (issue) =>
+      createIndividualCard({
+        octokit,
+        zenhubApi,
+        clubhouseApi,
+        issue,
+      })
+    )
+  );
+};
 
+const createIndividualCard = async ({
+  octokit,
+  zenhubApi,
+  clubhouseApi,
+  issue,
+}) => {
   const commentsResponse = await octokit.issues.listComments({
     owner: process.env.GITHUB_OWNER,
     repo: process.env.GITHUB_REPO,
-    issue_number: firstIssue.number,
+    issue_number: issue.number,
   });
 
-  var cb = function (error, data) {
-    console.log(error);
-    console.log(data);
-}
+  const issueData: any = await issueDataPromise(
+    zenhubApi,
+    process.env.ZENHUB_REPO_ID,
+    issue.number
+  );
+  const isEpic = issueData.is_epic;
+  const pipelineName = issueData.pipeline.name;
+  const workflowStateId = getWorkflowStateId(pipelineName);
 
-  // const issue = zenhubApi.issues.getIssue(firstIssue.number);
-  console.log(zenhubApi.issues.getIssueData(273086464, firstIssue.number, cb));
+  try {
+    if (!isEpic) {
+      await createStory({
+        clubhouseApi,
+        created_at: issue.created_at,
+        updated_at: issue.updated_at,
+        labels: issue.labels,
+        title: issue.title,
+        body: issue.body,
+        comments: commentsResponse.data,
+        workflow_state_id: workflowStateId,
+      });
+    } else {
+      await createEpic({
+        clubhouseApi,
+        created_at: issue.created_at,
+        updated_at: issue.updated_at,
+        title: issue.title,
+        body: issue.body,
+      });
+    }
+  } catch (err) {
+    console.error(err);
+  }
+};
 
-  // estimate.value
-  // is_epic
-  // pipeline.name
+const issueDataPromise = (zenhubApi, ...args) => {
+  return new Promise((resolve, reject) => {
+    zenhubApi.issues.getIssueData(...args, (err, data) => {
+      if (err) return reject(err);
+      resolve(data);
+    });
+  });
+};
 
-  //   await createStory({
-  //     clubhouseApi,
-  //     created_at: firstIssue.created_at,
-  //     updated_at: firstIssue.updated_at,
-  //     labels: firstIssue.labels,
-  //     title: firstIssue.title,
-  //     body: firstIssue.body,
-  //     comments: commentsResponse.data,
-  //      workflow_state_id,
-  //   });
-  // };
+const createStory = async ({
+  clubhouseApi,
+  created_at,
+  updated_at,
+  labels,
+  title,
+  body,
+  comments,
+  workflow_state_id,
+}) => {
+  const { id } = await clubhouseApi.createStory({
+    created_at,
+    updated_at,
+    story_type: getStoryType(labels),
+    name: title,
+    description: body,
+    project_id: parseInt(process.env["PROJECT_ID"], 10),
+    labels: getLabels(labels),
+    workflow_state_id,
+  });
+
+  for (const comment of comments) {
+    await clubhouseApi.createStoryComment(
+      id,
+      `*Migrated From Zenhub* \n\n${comment.user.login} on ${moment(
+        comment.created_at
+      ).format("MMMM Do YYYY, h:mm:ss a")} \n${comment.body}`
+    );
+  }
+};
+
+const getWorkflowStateId = (pipeline) => {
+  try {
+    const clubhouseWorkflowState = ZENHUB_TO_CLUBHOUSE_WORKFLOW_MAPPING[pipeline];
+    const clubhouseWorkflowId = CLUBHOUSE_WORKFLOW_STATE[clubhouseWorkflowState];
+    return clubhouseWorkflowId;
+  } catch (err) {
+    console.error(err)
+  }
+  return null;
+};
+
+const getLabels = (labels) =>
+  labels.map(({ name, color, description }) => ({
+    color,
+    description,
+    external_id: name,
+    name,
+  }));
+
+const getStoryType = (labels) => {
+  if (labels.find(({ name }) => name.includes("bug"))) {
+    return "bug";
+  }
+  return "feature";
+};
+
+const createEpic = async ({
+  clubhouseApi,
+  created_at,
+  updated_at,
+  title,
+  body,
+}) => {
+  await clubhouseApi.createEpic({
+    created_at,
+    updated_at,
+    name: title,
+    description: body,
+  });
+};
+
+const CLUBHOUSE_WORKFLOW_STATE = {
+  Backlog: 500000028,
+  Inbox: 500000008,
+  Planning: 500000027,
+  Ready: 500000007,
+  "In Progress": 500000006,
+  "Ready for QA/Review": 500000026,
+  "To Deploy": 500000009,
+  Done: 500000011,
+};
+
+const ZENHUB_TO_CLUBHOUSE_WORKFLOW_MAPPING = {
+  "New Issues": "Inbox",
+  Icebox: "Backlog",
+  Epics: "Backlog",
+  Backlog: "Planning",
+  "Ready To Go": "Ready",
+  "In Progress": "In Progress",
+  Blocked: "Inn Progress",
+  "Review/QA": "Ready for QA/Review",
+  "Ready To Deploy": "To Deploy",
+  Closed: "Done",
 };
