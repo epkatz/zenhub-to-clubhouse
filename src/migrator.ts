@@ -34,9 +34,14 @@ export const migrateIssuesForRepo = async ({
     parseInt(process.env["PROJECT_ID"], 10)
   );
 
+  const epics = await clubhouseApi.listEpics(); 
+
   const storiesSet = new Set();
   stories.map((s) => {
     storiesSet.add(s.name);
+  });
+  epics.map((e) => {
+    storiesSet.add(e.name);
   });
 
   await Promise.all(
@@ -77,7 +82,6 @@ const createIndividualCard = async ({
     : null;
 
   if (storiesSet.has(issue.title)) {
-    console.log(`Issue "${issue.title}" already created`);
     return;
   } else {
     console.log(`***Creating issue "${issue.title}"***`);
