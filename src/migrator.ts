@@ -30,6 +30,15 @@ export const migrateIssuesForRepo = async ({
       console.log(err);
     });
 
+  const stories = await clubhouseApi.listStories(
+    parseInt(process.env["PROJECT_ID"], 10)
+  );
+
+  const storiesSet = new Set();
+  stories.map((s) => {
+    storiesSet.add(s.name);
+  });
+
   await Promise.all(
     issues.map(async (issue) =>
       createIndividualCard({
@@ -37,6 +46,7 @@ export const migrateIssuesForRepo = async ({
         zenhubApi,
         clubhouseApi,
         issue,
+        storiesSet,
       })
     )
   );
@@ -47,6 +57,7 @@ const createIndividualCard = async ({
   zenhubApi,
   clubhouseApi,
   issue,
+  storiesSet,
 }) => {
   const commentsResponse = await octokit.issues.listComments({
     owner: process.env.GITHUB_OWNER,
@@ -60,8 +71,17 @@ const createIndividualCard = async ({
     issue.number
   );
   const isEpic = issueData.is_epic;
-  const pipelineName = issueData.pipeline.name;
-  const workflowStateId = getWorkflowStateId(pipelineName);
+  const pipelineName = issueData.pipeline && issueData.pipeline.name || null;
+  const workflowStateId = pipelineName
+    ? getWorkflowStateId(pipelineName)
+    : null;
+
+  if (storiesSet.has(issue.title)) {
+    console.log(`Issue "${issue.title}" already created`);
+    return;
+  } else {
+    console.log(`***Creating issue "${issue.title}"***`);
+  }
 
   try {
     if (!isEpic) {
@@ -76,13 +96,15 @@ const createIndividualCard = async ({
         workflow_state_id: workflowStateId,
       });
     } else {
-      await createEpic({
-        clubhouseApi,
-        created_at: issue.created_at,
-        updated_at: issue.updated_at,
-        title: issue.title,
-        body: issue.body,
-      });
+      if (process.env["RUN_TYPE"] !== "redo") {
+        await createEpic({
+          clubhouseApi,
+          created_at: issue.created_at,
+          updated_at: issue.updated_at,
+          title: issue.title,
+          body: issue.body,
+        });
+      }
     }
   } catch (err) {
     console.error(err);
@@ -131,11 +153,13 @@ const createStory = async ({
 
 const getWorkflowStateId = (pipeline) => {
   try {
-    const clubhouseWorkflowState = ZENHUB_TO_CLUBHOUSE_WORKFLOW_MAPPING[pipeline];
-    const clubhouseWorkflowId = CLUBHOUSE_WORKFLOW_STATE[clubhouseWorkflowState];
+    const clubhouseWorkflowState =
+      ZENHUB_TO_CLUBHOUSE_WORKFLOW_MAPPING[pipeline];
+    const clubhouseWorkflowId =
+      CLUBHOUSE_WORKFLOW_STATE[clubhouseWorkflowState];
     return clubhouseWorkflowId;
   } catch (err) {
-    console.error(err)
+    console.error(err);
   }
   return null;
 };
@@ -182,14 +206,14 @@ const CLUBHOUSE_WORKFLOW_STATE = {
 };
 
 const ZENHUB_TO_CLUBHOUSE_WORKFLOW_MAPPING = {
-  "New Issues": "Inbox",
-  Icebox: "Backlog",
+  "Upcoming Sprint Backlog": "Planning",
+  "To Do": "Planning",
+  "Pit Of Despair": "Backlog",
   Epics: "Backlog",
-  Backlog: "Planning",
   "Ready To Go": "Ready",
   "In Progress": "In Progress",
-  Blocked: "Inn Progress",
-  "Review/QA": "Ready for QA/Review",
-  "Ready To Deploy": "To Deploy",
+  Blocked: "In Progress",
+  "Ready for QA/Review": "Ready for QA/Review",
+  "QA Passed/Under PR": "To Deploy",
   Closed: "Done",
 };
