@@ -142,7 +142,7 @@ const getWorkflowStateId = (pipeline) => {
 
 const getLabels = (labels) =>
   labels.map(({ name, color, description }) => ({
-    color,
+    color: `#${color}`,
     description,
     external_id: name,
     name,
