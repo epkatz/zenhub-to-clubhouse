@@ -28,7 +28,7 @@
     "add": "^2.0.6",
     "clubhouse-lib": "^0.10.0",
     "dotenv": "^8.2.0",
-    "moment": "^2.27.0",
+    "moment": "^2.29.2",
     "node-zenhub": "^1.2.1",
     "ts-node": "^8.10.2",
     "typescript": "^3.9.5",
